@@ -110,6 +110,9 @@ class ChessGame:
         self.move_history = []  # Stack of moves for undo
         self.redo_history = []  # Stack of moves for redo
         
+        # Board rotation
+        self.board_flipped = False  # False = White at bottom, True = Black at bottom
+        
         # Fonts
         self.font = pygame.font.Font(None, 24)
         self.big_font = pygame.font.Font(None, 36)
@@ -122,7 +125,8 @@ class ChessGame:
             'reset': pygame.Rect(BOARD_SIZE + 20, 150, 160, 40),
             'clear': pygame.Rect(BOARD_SIZE + 20, 200, 160, 40),
             'undo': pygame.Rect(BOARD_SIZE + 20, 250, 75, 30),
-            'redo': pygame.Rect(BOARD_SIZE + 105, 250, 75, 30)
+            'redo': pygame.Rect(BOARD_SIZE + 105, 250, 75, 30),
+            'rotate': pygame.Rect(BOARD_SIZE + 20, 290, 160, 30)
         }
         
         # Setup default position or empty board
@@ -170,16 +174,26 @@ class ChessGame:
         """Convert chess square to screen coordinates"""
         file = chess.square_file(square)
         rank = chess.square_rank(square)
-        x = file * SQUARE_SIZE
-        y = (7 - rank) * SQUARE_SIZE
+        
+        if self.board_flipped:
+            x = (7 - file) * SQUARE_SIZE  # Flip horizontally
+            y = rank * SQUARE_SIZE        # Flip vertically
+        else:
+            x = file * SQUARE_SIZE
+            y = (7 - rank) * SQUARE_SIZE
         return x, y
 
     def coords_to_square(self, x, y):
         """Convert screen coordinates to chess square"""
         if x < 0 or x >= BOARD_SIZE or y < 0 or y >= BOARD_SIZE:
             return None
-        file = x // SQUARE_SIZE
-        rank = 7 - (y // SQUARE_SIZE)
+        
+        if self.board_flipped:
+            file = 7 - (x // SQUARE_SIZE)  # Flip horizontally
+            rank = y // SQUARE_SIZE        # Flip vertically
+        else:
+            file = x // SQUARE_SIZE
+            rank = 7 - (y // SQUARE_SIZE)
         return chess.square(file, rank)
 
     def draw_board(self):
@@ -200,12 +214,18 @@ class ChessGame:
                 
                 # Add coordinate labels
                 if file == 0:  # Rank labels
-                    rank_label = str(8 - rank)
+                    if self.board_flipped:
+                        rank_label = str(rank + 1)  # Flipped rank numbers
+                    else:
+                        rank_label = str(8 - rank)  # Normal rank numbers
                     text = self.font.render(rank_label, True, (0, 0, 0))
                     self.screen.blit(text, (5, rank * SQUARE_SIZE + 5))
                 
                 if rank == 7:  # File labels
-                    file_label = chr(ord('a') + file)
+                    if self.board_flipped:
+                        file_label = chr(ord('h') - file)  # Flipped file letters
+                    else:
+                        file_label = chr(ord('a') + file)  # Normal file letters
                     text = self.font.render(file_label, True, (0, 0, 0))
                     self.screen.blit(text, (file * SQUARE_SIZE + SQUARE_SIZE - 15, BOARD_SIZE - 20))
 
@@ -364,6 +384,11 @@ class ChessGame:
         redo_text = self.font.render("↷ Redo", True, TEXT_COLOR)
         self.screen.blit(redo_text, (BOARD_SIZE + 110, 257))
         
+        # Rotate board button
+        pygame.draw.rect(self.screen, BUTTON_COLOR, self.buttons['rotate'])
+        rotate_text = f"🔄 Flip Board ({'Black' if self.board_flipped else 'White'} view)"
+        self.screen.blit(self.font.render(rotate_text, True, TEXT_COLOR), (BOARD_SIZE + 25, 297))
+        
         # Game status
         if self.game_started:
             status_y = 280
@@ -424,6 +449,10 @@ class ChessGame:
             self.undo_move()
         elif self.buttons['redo'].collidepoint(pos):
             self.redo_move()
+        elif self.buttons['rotate'].collidepoint(pos):
+            self.board_flipped = not self.board_flipped
+            view_name = "Black" if self.board_flipped else "White"
+            print(f"Board flipped to {view_name} view")
         else:
             # Check for palette piece click first
             palette_piece = self.get_palette_piece_at(pos)
