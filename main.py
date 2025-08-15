@@ -106,6 +106,10 @@ class ChessGame:
         self.game_over = False
         self.game_result = ""
         
+        # Undo/Redo functionality
+        self.move_history = []  # Stack of moves for undo
+        self.redo_history = []  # Stack of moves for redo
+        
         # Fonts
         self.font = pygame.font.Font(None, 24)
         self.big_font = pygame.font.Font(None, 36)
@@ -116,7 +120,9 @@ class ChessGame:
             'white': pygame.Rect(BOARD_SIZE + 20, 100, 75, 30),
             'black': pygame.Rect(BOARD_SIZE + 105, 100, 75, 30),
             'reset': pygame.Rect(BOARD_SIZE + 20, 150, 160, 40),
-            'clear': pygame.Rect(BOARD_SIZE + 20, 200, 160, 40)
+            'clear': pygame.Rect(BOARD_SIZE + 20, 200, 160, 40),
+            'undo': pygame.Rect(BOARD_SIZE + 20, 250, 75, 30),
+            'redo': pygame.Rect(BOARD_SIZE + 105, 250, 75, 30)
         }
         
         # Setup default position or empty board
@@ -346,6 +352,18 @@ class ChessGame:
         clear_text = self.font.render("Clear Board", True, TEXT_COLOR)
         self.screen.blit(clear_text, (BOARD_SIZE + 45, 210))
         
+        # Undo button
+        undo_color = BUTTON_COLOR if self.move_history else (100, 100, 100)
+        pygame.draw.rect(self.screen, undo_color, self.buttons['undo'])
+        undo_text = self.font.render("↶ Undo", True, TEXT_COLOR)
+        self.screen.blit(undo_text, (BOARD_SIZE + 25, 257))
+        
+        # Redo button
+        redo_color = BUTTON_COLOR if self.redo_history else (100, 100, 100)
+        pygame.draw.rect(self.screen, redo_color, self.buttons['redo'])
+        redo_text = self.font.render("↷ Redo", True, TEXT_COLOR)
+        self.screen.blit(redo_text, (BOARD_SIZE + 110, 257))
+        
         # Game status
         if self.game_started:
             status_y = 280
@@ -402,6 +420,10 @@ class ChessGame:
         elif self.buttons['clear'].collidepoint(pos):
             print("Clearing board")
             self.clear_board()
+        elif self.buttons['undo'].collidepoint(pos):
+            self.undo_move()
+        elif self.buttons['redo'].collidepoint(pos):
+            self.redo_move()
         else:
             # Check for palette piece click first
             palette_piece = self.get_palette_piece_at(pos)
@@ -476,6 +498,8 @@ class ChessGame:
             
             if move in self.board.legal_moves:
                 self.board.push(move)
+                self.move_history.append(move)  # Record move for undo
+                self.redo_history.clear()  # Clear redo history when new move is made
                 self.selected_square = None
                 
                 # Check game state
@@ -558,6 +582,8 @@ class ChessGame:
                 move = chess.Move.from_uci(best_move)
                 if move in self.board.legal_moves:
                     self.board.push(move)
+                    self.move_history.append(move)  # Record Stockfish move for undo
+                    self.redo_history.clear()  # Clear redo history when new move is made
                     self.move_count += 1
                     
                     # Check game state
@@ -623,6 +649,46 @@ class ChessGame:
         self.game_over = False
         self.game_result = ""
         self.show_piece_palette = True
+        
+    def undo_move(self):
+        """Undo the last move"""
+        if not self.move_history:
+            print("No moves to undo")
+            return
+            
+        # Get the last move and remove it from history
+        last_move = self.move_history.pop()
+        
+        # Add to redo history
+        self.redo_history.append(last_move)
+        
+        # Undo the move on the board
+        try:
+            self.board.pop()  # chess.Board.pop() undoes the last move
+            self.move_count = max(0, self.move_count - 1)
+            print(f"Undid move: {last_move}")
+        except Exception as e:
+            print(f"Error undoing move: {e}")
+            
+    def redo_move(self):
+        """Redo the last undone move"""
+        if not self.redo_history:
+            print("No moves to redo")
+            return
+            
+        # Get the move from redo history
+        move = self.redo_history.pop()
+        
+        # Add back to move history
+        self.move_history.append(move)
+        
+        # Apply the move to the board
+        try:
+            self.board.push(move)
+            self.move_count += 1
+            print(f"Redid move: {move}")
+        except Exception as e:
+            print(f"Error redoing move: {e}")
 
     def draw_dragged_piece(self):
         """Draw the piece being dragged"""
